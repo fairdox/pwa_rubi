@@ -8,21 +8,27 @@ class RubRace {
         this.canvas.height = designHeight;
         this.ctx = canvas.getContext('2d');
 
-        // Color definitions (Rubik's standard)
         this.colors = {
-            'R': '#B71234', // Red
-            'O': '#FF5800', // Orange
-            'Y': '#FFD500', // Yellow
-            'G': '#009B48', // Green
-            'B': '#0046AD', // Blue
-            'W': '#FFFFFF'  // White
+            'R': '#B71234',
+            'O': '#FF5800',
+            'Y': '#FFD500',
+            'G': '#009B48',
+            'B': '#0046AD',
+            'W': '#FFFFFF'
         };
 
-        // Initialize game state
-        this.targetPattern = []; // 3x3 array
-        this.playerBoard = [];   // 5x5 array
-        this.emptyPos = { row: -1, col: -1 }; // Track the empty spot
+        // Game States: 'START_MENU', 'PLAYING', 'GAME_OVER'
+        this.gameState = 'START_MENU';
+        this.highScores = [];
+        this.startTime = 0;
+        this.elapsedTime = 0; // in milliseconds
+        this.timerInterval = null;
 
+        this.targetPattern = [];
+        this.playerBoard = [];
+        this.emptyPos = { row: -1, col: -1 };
+
+        this.loadHighScores();
         this.initGame();
 
         window.addEventListener('resize', () => this.resize());
@@ -32,7 +38,6 @@ class RubRace {
     }
 
     initGame() {
-        // 1. Create the pool of 24 colored tiles (4 of each of the 6 colors)
         const colorKeys = Object.keys(this.colors);
         let tilePool = [];
         colorKeys.forEach(color => {
@@ -41,11 +46,8 @@ class RubRace {
             }
         });
 
-        // Shuffle the pool
         this.shuffleArray(tilePool);
 
-        // 2. Populate the 5x5 player board with 24 tiles and 1 empty spot (null)
-        // Choose a random index for the empty spot
         const emptyIndex = Math.floor(Math.random() * 25);
         let poolIndex = 0;
 
@@ -63,15 +65,10 @@ class RubRace {
             this.playerBoard.push(row);
         }
 
-        // 3. Generate a valid 3x3 target pattern
-        // It must be achievable using the total count of tiles available in the game
         this.generateTargetPattern();
     }
 
     generateTargetPattern() {
-        // To ensure the goal is completely fair and possible, we count the colors
-        // remaining on the board or pull randomly from a valid distribution.
-        // A simple approach is to copy the board, shuffle it, and take a 3x3 slice.
         let flatBoard = [];
         for (let r = 0; r < 5; r++) {
             for (let c = 0; c < 5; c++) {
@@ -100,6 +97,67 @@ class RubRace {
         }
     }
 
+    startGame() {
+        this.initGame();
+        this.gameState = 'PLAYING';
+        this.startTime = Date.now();
+        this.elapsedTime = 0;
+
+        if (this.timerInterval) clearInterval(this.timerInterval);
+        this.timerInterval = setInterval(() => {
+            this.elapsedTime = Date.now() - this.startTime;
+            this.draw();
+        }, 200);
+
+        this.draw();
+    }
+
+    checkWinCondition() {
+        // The target 3x3 must match the inner 3x3 of the 5x5 player board (rows 1-3, columns 1-3)
+        for (let r = 0; r < 3; r++) {
+            for (let c = 0; c < 3; c++) {
+                if (this.playerBoard[r + 1][c + 1] !== this.targetPattern[r][c]) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    handleWin() {
+        clearInterval(this.timerInterval);
+        this.gameState = 'GAME_OVER';
+        this.saveScore(this.elapsedTime);
+        this.draw();
+    }
+
+    loadHighScores() {
+        const data = localStorage.getItem('rubrace_highscores');
+        this.highScores = data ? JSON.parse(data) : [];
+    }
+
+    saveScore(ms) {
+        const formattedTime = this.formatTime(ms);
+        this.highScores.push({ ms: ms, timeStr: formattedTime, date: new Date().toLocaleDateString() });
+        
+        // Sort ascending (fastest time first)
+        this.highScores.sort((a, b) => a.ms - b.ms);
+        
+        // Keep only top 10 scores
+        if (this.highScores.length > 10) {
+            this.highScores = this.highScores.slice(0, 10);
+        }
+        
+        localStorage.setItem('rubrace_highscores', JSON.stringify(this.highScores));
+    }
+
+    formatTime(ms) {
+        const totalSeconds = Math.floor(ms / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    }
+
     resize() {
         this.isLandscape = window.innerWidth > window.innerHeight;
         const app = document.getElementById("app");
@@ -122,7 +180,6 @@ class RubRace {
         this.canvas.style.width  = (designWidth * scale) + 'px';
         this.canvas.style.height = (designHeight * scale) + 'px';
 
-        // Keep internal coordinates matching the design resolution
         this.scale = 1; 
         this.scaleH = 1;
 
@@ -130,47 +187,50 @@ class RubRace {
     }
 
     draw() {
-        // Clear canvas using design base dimensions
-        this.ctx.fillStyle = "#1E1E1E"; // Dark background
+        // Main Background
+        this.ctx.fillStyle = "#0000";
         this.ctx.fillRect(0, 0, designWidth, designHeight);
 
-        // --- Layout Math (Using fixed design dimensions) ---
+        // --- Render Top Game Elements ---
         const padding = 4;
         const borderRadius = 6;
 
-        // Top Area: 3x3 Target Pattern
-        const targetTileSize = 40;
+        // Draw Timer (mm:ss) centered at the very top
+        this.ctx.fillStyle = "#FFD500";
+        this.ctx.font = "bold 28px monospace";
+        this.ctx.textAlign = "center";
+        const displayTime = this.formatTime(this.elapsedTime);
+        this.ctx.fillText(displayTime, designWidth / 2, 45);
+
+        // 3x3 Target Pattern Layout
+        const targetTileSize = 50;
         const targetGridSize = (targetTileSize * 3) + (padding * 2);
         const targetStartX = (designWidth - targetGridSize) / 2;
-        const targetStartY = 80; // Margin from top
+        const targetStartY = 85;
 
-        // Frame background for target
         this.ctx.fillStyle = "#111111";
         this.ctx.fillRect(targetStartX - 8, targetStartY - 8, targetGridSize + 16, targetGridSize + 16);
 
-        // Draw 3x3 Target
         for (let r = 0; r < 3; r++) {
             for (let c = 0; c < 3; c++) {
                 const colorCode = this.targetPattern[r][c];
                 const x = targetStartX + c * (targetTileSize + padding);
                 const y = targetStartY + r * (targetTileSize + padding);
                 
-                this.ctx.fillStyle = this.colors[colorCode];
+                this.ctx.fillStyle = this.colors[colorCode] || "#333333";
                 this.drawRoundedRect(x, y, targetTileSize, targetTileSize, borderRadius);
             }
         }
 
-        // Bottom Area: 5x5 Play Grid
-        const playerTileSize = 60;
+        // --- Render Bottom Play Grid ---
+        const playerTileSize = 70;
         const playerGridSize = (playerTileSize * 5) + (padding * 4);
         const playerStartX = (designWidth - playerGridSize) / 2;
-        const playerStartY = 400; // Positioned lower on screen
+        const playerStartY = 400;
 
-        // Frame background for player board
         this.ctx.fillStyle = "#111111";
         this.ctx.fillRect(playerStartX - 10, playerStartY - 10, playerGridSize + 20, playerGridSize + 20);
 
-        // Draw 5x5 Board
         for (let r = 0; r < 5; r++) {
             for (let c = 0; c < 5; c++) {
                 const colorCode = this.playerBoard[r][c];
@@ -181,15 +241,85 @@ class RubRace {
                     this.ctx.fillStyle = this.colors[colorCode];
                     this.drawRoundedRect(x, y, playerTileSize, playerTileSize, borderRadius);
                 } else {
-                    // Empty tile spot texture
                     this.ctx.fillStyle = "#222222";
                     this.ctx.fillRect(x, y, playerTileSize, playerTileSize);
                 }
             }
         }
+
+        // --- Render Overlay Screens ---
+        if (this.gameState === 'START_MENU' || this.gameState === 'GAME_OVER') {
+            this.drawOverlay();
+        }
     }
 
-    // Helper method to draw smooth tiles
+    drawOverlay() {
+        // Semi-transparent overlay block
+        this.ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+        this.ctx.fillRect(0, 0, designWidth, designHeight);
+
+        this.ctx.textAlign = "center";
+        
+        // Header Text
+        if (this.gameState === 'START_MENU') {
+            this.ctx.fillStyle = "#009B48"; // Retro Green
+            this.ctx.font = "bold 32px monospace";
+            this.ctx.fillText("RUBIK RACE", designWidth / 2, 130);
+        } else {
+            this.ctx.fillStyle = "#B71234"; // Retro Red
+            this.ctx.font = "bold 32px monospace";
+            this.ctx.fillText("GAME FINISHED!", designWidth / 2, 110);
+
+            this.ctx.fillStyle = "#FFFFFF";
+            this.ctx.font = "20px monospace";
+            this.ctx.fillText(`YOUR TIME: ${this.formatTime(this.elapsedTime)}`, designWidth / 2, 150);
+        }
+
+        // Leaderboard Title
+        this.ctx.fillStyle = "#FF5800"; // Orange
+        this.ctx.font = "22px monospace";
+        this.ctx.fillText("TOP 10 LEADERBOARD", designWidth / 2, 220);
+
+        // Render Leaderboard Items
+        this.ctx.font = "18px monospace";
+        let startY = 260;
+        const rowHeight = 32;
+
+        if (this.highScores.length === 0) {
+            this.ctx.fillStyle = "#888888";
+            this.ctx.fillText("NO SCORES YET", designWidth / 2, startY + 40);
+        } else {
+            this.highScores.forEach((score, index) => {
+                const currentY = startY + (index * rowHeight);
+                
+                // Flashy colors for top 3 positions
+                if (index === 0) this.ctx.fillStyle = "#FFD500";      // Gold
+                else if (index === 1) this.ctx.fillStyle = "#DDDDDD"; // Silver
+                else if (index === 2) this.ctx.fillStyle = "#CD7F32"; // Bronze
+                else this.ctx.fillStyle = "#0046AD";                  // Blue
+
+                // Left-aligned Rank/Date & Right-aligned Time via padded structure
+                const rankStr = `${(index + 1).toString().padStart(2, '0')}.`;
+                this.ctx.textAlign = "left";
+                this.ctx.fillText(rankStr, 45, currentY);
+                this.ctx.fillText(score.date, 95, currentY);
+                
+                this.ctx.textAlign = "right";
+                this.ctx.fillText(score.timeStr, designWidth - 45, currentY);
+            });
+        }
+
+        // Call-to-action Footer
+        this.ctx.textAlign = "center";
+        this.ctx.fillStyle = "#FFFFFF";
+        this.ctx.font = "bold 20px monospace";
+        
+        // Quick blink calculation using timestamps
+        if (Math.floor(Date.now() / 600) % 2 === 0) {
+            this.ctx.fillText("TAP SCREEN TO START", designWidth / 2, 680);
+        }
+    }
+
     drawRoundedRect(x, y, width, height, radius) {
         this.ctx.beginPath();
         this.ctx.moveTo(x + radius, y);
@@ -204,19 +334,22 @@ class RubRace {
         this.ctx.closePath();
         this.ctx.fill();
         
-        // Slight inner border for depth
         this.ctx.strokeStyle = "rgba(0,0,0,0.15)";
         this.ctx.lineWidth = 2;
         this.ctx.stroke();
     }
 
-handleTouch(e) {
-        // Prevent default behavior to stop screen bouncing on mobile touch
+    handleTouch(e) {
         if (e.type === 'touchstart') {
             e.preventDefault();
         }
 
-        // Get coordinates relative to the canvas bounding rect
+        // Handle Tap-To-Start state changes
+        if (this.gameState === 'START_MENU' || this.gameState === 'GAME_OVER') {
+            this.startGame();
+            return;
+        }
+
         const rect = this.canvas.getBoundingClientRect();
         let clientX, clientY;
 
@@ -228,18 +361,15 @@ handleTouch(e) {
             clientY = e.clientY;
         }
 
-        // Project window coordinates back into our fixed 390x797 design space
         let canvasX = clientX - rect.left;
         let canvasY = clientY - rect.top;
 
-        // Account for rotation if user is in landscape mode
         if (this.isLandscape) {
             const temp = canvasX;
             canvasX = canvasY;
             canvasY = rect.height - temp;
         }
 
-        // Rescale based on CSS dimensions relative to internal canvas resolution
         const finalX = canvasX * (designWidth / rect.width);
         const finalY = canvasY * (designHeight / rect.height);
 
@@ -247,22 +377,18 @@ handleTouch(e) {
     }
 
     processGridClick(x, y) {
-        // Layout constants matching the draw function
         const padding = 4;
         const playerTileSize = 60;
         const playerGridSize = (playerTileSize * 5) + (padding * 4);
         const playerStartX = (designWidth - playerGridSize) / 2;
         const playerStartY = 400;
 
-        // Check if click falls within the bounds of the 5x5 grid bounding box
         if (x >= playerStartX && x < playerStartX + playerGridSize &&
             y >= playerStartY && y < playerStartY + playerGridSize) {
             
-            // Determine exact column and row index
             const col = Math.floor((x - playerStartX) / (playerTileSize + padding));
             const row = Math.floor((y - playerStartY) / (playerTileSize + padding));
 
-            // Ensure calculated indices fall strictly inside 0-4 boundaries
             if (row >= 0 && row < 5 && col >= 0 && col < 5) {
                 this.tryMoveTile(row, col);
             }
@@ -273,14 +399,10 @@ handleTouch(e) {
         const emptyRow = this.emptyPos.row;
         const emptyCol = this.emptyPos.col;
 
-        // Check if the clicked tile shares either the same row or same column as the empty space
         if (clickedRow === emptyRow || clickedCol === emptyCol) {
-            
-            // Set increments to track direction of movement
-            const rowDir = Math.sign(clickedRow - emptyRow); // -1, 0, or 1
-            const colDir = Math.sign(clickedCol - emptyCol); // -1, 0, or 1
+            const rowDir = Math.sign(clickedRow - emptyRow);
+            const colDir = Math.sign(clickedCol - emptyCol);
 
-            // Shift elements sequentially from the empty spot position up to the clicked cell
             let currRow = emptyRow;
             let currCol = emptyCol;
 
@@ -288,19 +410,21 @@ handleTouch(e) {
                 const nextRow = currRow + rowDir;
                 const nextCol = currCol + colDir;
 
-                // Move the adjacent piece into the current spot
                 this.playerBoard[currRow][currCol] = this.playerBoard[nextRow][nextCol];
 
                 currRow = nextRow;
                 currCol = nextCol;
             }
 
-            // The original clicked cell becomes the new empty space
             this.playerBoard[clickedRow][clickedCol] = null;
             this.emptyPos = { row: clickedRow, col: clickedCol };
 
-            // Re-render frame immediately with updated layout state
-            this.draw();
+            // Check if this move completes the target pattern match
+            if (this.checkWinCondition()) {
+                this.handleWin();
+            } else {
+                this.draw();
+            }
         }
     }
 }
