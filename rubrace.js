@@ -188,7 +188,7 @@ class RubRace {
 
     draw() {
         // Main Background
-        this.ctx.fillStyle = "#0000";
+        this.ctx.fillStyle = "#000000FF";
         this.ctx.fillRect(0, 0, designWidth, designHeight);
 
         // --- Render Top Game Elements ---
@@ -313,7 +313,7 @@ class RubRace {
         this.ctx.textAlign = "center";
         this.ctx.fillStyle = "#FFFFFF";
         this.ctx.font = "bold 20px monospace";
-        
+
         // Quick blink calculation using timestamps
         if (Math.floor(Date.now() / 600) % 2 === 0) {
             this.ctx.fillText("TAP SCREEN TO START", designWidth / 2, 680);
@@ -333,7 +333,9 @@ class RubRace {
         this.ctx.quadraticCurveTo(x, y, x + radius, y);
         this.ctx.closePath();
         this.ctx.fill();
-        
+        // This overlays a 30% white layer to make any base color look pastel/softer
+        this.ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+        this.ctx.fill();
         this.ctx.strokeStyle = "rgba(0,0,0,0.15)";
         this.ctx.lineWidth = 2;
         this.ctx.stroke();
@@ -378,7 +380,7 @@ class RubRace {
 
     processGridClick(x, y) {
         const padding = 4;
-        const playerTileSize = 60;
+        const playerTileSize = 70;
         const playerGridSize = (playerTileSize * 5) + (padding * 4);
         const playerStartX = (designWidth - playerGridSize) / 2;
         const playerStartY = 400;
