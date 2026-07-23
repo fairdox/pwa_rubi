@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>World Clock & Persian Calendar</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+
+    .header-container {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .gregorian-date {
+      font-size: 1.5rem;
+      color: #b0bec5;
+      margin-bottom: 5px;
+    }
+
+    .day-of-week {
+      font-size: 1.8rem;
+      font-weight: bold;
+      color: #ffffff;
+      margin-bottom: 10px;
+    }
+
+    .persian-date {
+      font-size: 2rem;
+      font-family: 'Tahoma', 'Arial', sans-serif;
+      color: #81c784;
+    }
+
+    .clocks-container {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      gap: 30px;
+    }
+
+    .clock-card {
+      text-align: center;
+      background: #1e1e1e;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Left and Right Clocks */
+    .clock-side {
+      font-size: 1.5rem;
+      color: #90caf9;
+      margin-top: 20px; /* Positions side clocks lower than the center */
+    }
+
+    .clock-side .time {
+      font-size: 2rem;
+      font-weight: bold;
+    }
+
+    /* Middle Clock */
+    .clock-center {
+      font-size: 2rem;
+      color: #ffb74d;
+    }
+
+    .clock-center .time {
+      font-size: 3.5rem;
+      font-weight: bold;
+    }
+
+    .label {
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header-container">
+    <div class="day-of-week" id="dayOfWeek"></div>
+    <div class="persian-date" id="persianDate"></div>
+    <div class="gregorian-date" id="gregorianDate"></div>
+  </div>
+
+  <div class="clocks-container">
+    <!-- Left Time Zone -->
+    <div class="clock-card clock-side">
+      <div class="label">سگیناز</div>
+      <div class="time" id="timeZoneLeft"></div>
+    </div>
+
+    <!-- Middle Time Zone -->
+    <div class="clock-card clock-center">
+      <div class="label">سگیبا</div>
+      <div class="time" id="timeZoneMiddle"></div>
+    </div>
+
+    <!-- Right Time Zone -->
+    <div class="clock-card clock-side">
+      <div class="label">سگید</div>
+      <div class="time" id="timeZoneRight"></div>
+    </div>
+  </div>
+
+  <script>
+    // Configured time zones
+    const timeZoneLeft = 'America/Los_Angeles';
+    const timeZoneMiddle = 'Asia/Tehran';
+    const timeZoneRight = 'America/New_York';
+
+    function updateDashboard() {
+      const now = new Date();
+
+      // 1. Gregorian Date
+      const gregorianOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+      document.getElementById('gregorianDate').innerText = now.toLocaleDateString('fr-US', gregorianOptions);
+
+      // 2. Day of the Week
+      const dayOptions = { weekday: 'long' };
+      document.getElementById('dayOfWeek').innerText = now.toLocaleDateString('fa-IR', dayOptions);
+
+      // 3. Persian Date in Persian Digits & Calendar
+        // Persian Date in custom order: Day Month Year (e.g., ۲  مرداد  ۱۴۰۵)
+        const persianFormatter = new Intl.DateTimeFormat('fa-IR', {
+        calendar: 'persian',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+        });
+
+        // Break the date into parts
+        const parts = persianFormatter.formatToParts(now);
+
+        // Extract individual components
+        let day = '';
+        let month = '';
+        let year = '';
+
+        for (const part of parts) {
+        if (part.type === 'day') day = part.value;
+        if (part.type === 'month') month = part.value;
+        if (part.type === 'year') year = part.value;
+        }
+        // Wrap components in RTL isolation: \u2067 (RLI) and \u2069 (PDI)
+        // This forces Month - Year - Day order without BIDI flipping
+        const isLI = '\u2067';
+        const pdi = '\u2069';
+        document.getElementById('persianDate').innerText = 
+        `${isLI}${year}${pdi} ${isLI}${month}${pdi} ${isLI}${day}${pdi}`;
+
+      // 4. Time Zones
+      const timeOptions = { hour: '2-digit', minute: '2-digit', hour12: false };
+
+      document.getElementById('timeZoneLeft').innerText = now.toLocaleTimeString('fa-IR', { ...timeOptions, timeZone: timeZoneLeft });
+      document.getElementById('timeZoneMiddle').innerText = now.toLocaleTimeString('fa-IR', { ...timeOptions, timeZone: timeZoneMiddle });
+      document.getElementById('timeZoneRight').innerText = now.toLocaleTimeString('fa-IR', { ...timeOptions, timeZone: timeZoneRight });
+    }
+
+    // Initial call and interval loop
+    updateDashboard();
+    setInterval(updateDashboard, 1000);
+  </script>
+
+</body>
+</html>
