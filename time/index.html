@@ -1,3 +1,4 @@
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,83 +6,118 @@
   <title>World Clock & Persian Calendar</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background-color: #121212;
-      color: #ffffff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      margin: 0;
+    font-family: Arial, sans-serif;
+    background-color: #121212;
+    color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+    padding: 20px 10px;
+    box-sizing: border-box;
     }
 
     .header-container {
-      text-align: center;
-      margin-bottom: 40px;
+    text-align: center;
+    margin-bottom: 30px;
+    width: 100%;
     }
 
     .gregorian-date {
-      font-size: 1.5rem;
-      color: #b0bec5;
-      margin-bottom: 5px;
+    font-size: 1.4rem;
+    color: #b0bec5;
+    margin-bottom: 5px;
     }
 
     .day-of-week {
-      font-size: 1.8rem;
-      font-weight: bold;
-      color: #ffffff;
-      margin-bottom: 10px;
+    font-size: 2rem;
+    font-weight: bold;
+    color: #ffffff;
+    margin-bottom: 10px;
     }
 
     .persian-date {
-      font-size: 2rem;
-      font-family: 'Tahoma', 'Arial', sans-serif;
-      color: #81c784;
+    font-size: 2.2rem;
+    font-family: 'Tahoma', 'Arial', sans-serif;
+    color: #81c784;
+    direction: rtl;
     }
 
     .clocks-container {
-      display: flex;
-      align-items: flex-end;
-      justify-content: center;
-      gap: 30px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 20px;
+    width: 100%;
+    max-width: 800px;
     }
 
     .clock-card {
-      text-align: center;
-      background: #1e1e1e;
-      padding: 20px;
-      border-radius: 12px;
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+    text-align: center;
+    background: #1e1e1e;
+    padding: 15px 10px;
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+    flex: 1;
     }
 
     /* Left and Right Clocks */
     .clock-side {
-      font-size: 1.5rem;
-      color: #90caf9;
-      margin-top: 20px; /* Positions side clocks lower than the center */
+    font-size: 1.2rem;
+    color: #90caf9;
+    margin-top: 20px;
     }
 
     .clock-side .time {
-      font-size: 2rem;
-      font-weight: bold;
+    font-size: 2rem;
+    font-weight: bold;
     }
 
     /* Middle Clock */
     .clock-center {
-      font-size: 2rem;
-      color: #ffb74d;
+    font-size: 1.5rem;
+    color: #ffb74d;
     }
 
     .clock-center .time {
-      font-size: 3.5rem;
-      font-weight: bold;
+    font-size: 3.5rem;
+    font-weight: bold;
     }
 
     .label {
-      margin-bottom: 8px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    }
+
+    /* --- Mobile Optimizations (iPhone Portrait) --- */
+    @media (max-width: 600px) {
+    .clocks-container {
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .clock-card {
+        width: 90%;
+        padding: 15px;
+    }
+
+    /* Reset vertical offset for stacked mobile view */
+    .clock-side {
+        margin-top: 0; 
+    }
+
+    /* Increase text sizes for phone screens */
+    .gregorian-date { font-size: 1.3rem; }
+    .day-of-week { font-size: 2.2rem; }
+    .persian-date { font-size: 2.4rem; }
+
+    /* Keep middle clock prominent even when stacked */
+    .clock-center .time { font-size: 3.8rem; }
+    .clock-side .time { font-size: 2.8rem; }
     }
   </style>
 </head>
