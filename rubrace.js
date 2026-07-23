@@ -1,5 +1,7 @@
 const designWidth = 390;
 const designHeight = 797;
+const CHECKED = '☑';
+const UNCHECKED = '☐';
 
 class RubRace {
     constructor(canvas) {
@@ -17,24 +19,144 @@ class RubRace {
             'W': '#FFFFFF'
         };
 
-        // Game States: 'START_MENU', 'PLAYING', 'GAME_OVER'
-        this.gameState = 'START_MENU';
+
+
         this.highScores = [];
         this.startTime = 0;
         this.elapsedTime = 0; // in milliseconds
-        this.timerInterval = null;
 
         this.targetPattern = [];
         this.playerBoard = [];
         this.emptyPos = { row: -1, col: -1 };
-
+        this.multiplayer = false;
         this.loadHighScores();
         this.initGame();
 
         window.addEventListener('resize', () => this.resize());
-        this.canvas.addEventListener('touchstart', (e) => this.handleTouch(e), { passive: false });
-        this.canvas.addEventListener('mousedown', (e) => this.handleTouch(e));
+        this.keyHelper = new KeyHelper(canvas);
+        this.setupTouchHandlers(this, canvas, this.keyHelper);
+        this.setupMouseHandlers(this, canvas, this.keyHelper);
         this.resize();
+        this.quitButton=this.keyHelper.addKey({
+            label: 'Quit',
+            x: designWidth - 110,
+            y: 0,
+            width: 100,
+            visible: false,
+            callback: () => {this.quitGame();}
+        });
+        this.readyButton=this.keyHelper.addKey({
+            label: UNCHECKED,
+            text: 'Ready to play:',
+            isToggle: true,
+            x: designWidth - 110,
+            y: 150,
+            width: 30,
+            visible: false,
+            callback: () => {this.readyToPlay(); }
+        });
+        this.startButton=this.keyHelper.addKey({
+            label: 'Start Game',
+            x: designWidth - 110,
+            y: 180,
+            width: 100,
+            visible: false,
+            callback: () => {gameClient.startGame(); }
+        });
+
+    }
+
+    changeReadyButtonVisibility(visible) {
+        if (visible) {
+            this.readyButton.visible = true;
+        } else {
+            this.readyButton.visible = false;
+        }
+    }
+
+    readyToPlay() {
+        if (this.readyButton.label === UNCHECKED)
+            gameClient.readyToPlay(true);
+        else
+            gameClient.readyToPlay(false);
+    }
+
+
+    setupTouchHandlers(engine, canvas, keyHelper) {
+
+        // Helper to extract the first touch point's coordinates safely
+        function getTouchCoords(event) {
+            if (event.touches && event.touches.length > 0) {
+                return {
+                    clientX: event.touches[0].clientX,
+                    clientY: event.touches[0].clientY
+                };
+            } else if (event.changedTouches && event.changedTouches.length > 0) {
+                // For touchend/touchcancel, the touch that left the screen is in changedTouches
+                return {
+                    clientX: event.changedTouches[0].clientX,
+                    clientY: event.changedTouches[0].clientY
+                };
+            }
+            return null;
+        }
+
+        // 1. Handle Press Down (Triggers the 3D button depression)
+        canvas.addEventListener('touchstart', function(e) {
+            // Prevent default browser behavior like scrolling or zooming on mobile
+            e.preventDefault(); 
+            
+            const coords = getTouchCoords(e);
+            if (coords) {
+                keyHelper.onPressDown(coords.clientX, coords.clientY);
+            }
+            engine.handleTouch(e);
+        }, { passive: false });
+
+        // 2. Handle Release/Tap (Executes callbacks and updates toggle state)
+        canvas.addEventListener('touchend', function(e) {
+            e.preventDefault();
+            
+            const coords = getTouchCoords(e);
+            if (coords) {
+                // onTap returns the key object if hit, or null if tapped outside
+                const pressedKey = keyHelper.onTap(coords.clientX, coords.clientY);
+                
+                if (pressedKey) {
+                    console.log(`Key interacted: ${pressedKey.label} (ID: ${pressedKey.id})`);
+                }
+            }
+        }, { passive: false });
+
+        // 3. Handle Cancel (Safely resets button state if a gesture interrupts the app)
+        canvas.addEventListener('touchcancel', function(e) {
+            e.preventDefault();
+            keyHelper.onPressCancel();
+        }, { passive: false });
+    }
+
+    setupMouseHandlers(engine, canvas, keyHelper) {
+        canvas.addEventListener('mousedown', function(e) {
+            keyHelper.onPressDown(e.clientX, e.clientY);
+            engine.handleTouch(e);
+        });
+
+        canvas.addEventListener('mouseup', function(e) {
+            keyHelper.onTap(e.clientX, e.clientY);
+        });
+
+        canvas.addEventListener('mouseleave', function(e) {
+            keyHelper.onPressCancel();
+    });
+}
+
+    init(multiplayer = false, serverUrl = null, playerName = null) {
+        this.multiplayer = multiplayer;
+        this.serverUrl = serverUrl;
+        this.playerName = playerName;
+        gameClient.init(this, this.serverUrl, this.playerName);
+        gameClient.setPhase('START_MENU');
+        this.draw();
     }
 
     initGame() {
@@ -97,43 +219,89 @@ class RubRace {
         }
     }
 
-    startGame() {
+    startLobby() {
         this.initGame();
-        this.gameState = 'PLAYING';
-        this.startTime = Date.now();
-        this.elapsedTime = 0;
-
-        if (this.timerInterval) clearInterval(this.timerInterval);
-        this.timerInterval = setInterval(() => {
-            this.elapsedTime = Date.now() - this.startTime;
-            this.draw();
-        }, 200);
-
-        this.draw();
+        gameClient.setPhase('LOBBY');
+        this.quitButton.visible = false;
+        this.changeReadyButtonVisibility(true)
+        this.startButton.visible = false;
     }
 
-    checkWinCondition() {
-        // The target 3x3 must match the inner 3x3 of the 5x5 player board (rows 1-3, columns 1-3)
+
+    startGame() {
+        this.initGame();
+        gameClient.setPhase('PLAYING');
+        this.winnerName = null;
+        this.startTime = Date.now();
+        this.elapsedTime = 0;
+        this.quitButton.visible = true;
+        this.changeReadyButtonVisibility(false);
+        this.startButton.visible = false;
+        this.drawSquareGameArea();
+    }
+
+    quitGame() {
+        if (this.multiplayer) {
+            gameClient.playerQuit();
+            // this.startLobby();
+        } else {
+            gameClient.setPhase('START_MENU');
+            this.loadHighScores();
+        }
+        this.quitButton.visible = false;
+        this.changeReadyButtonVisibility(true);
+        this.startButton.visible = false;
+
+    }
+
+    // called by gameClient when server declares the winner
+    stopGame(winner_name) {
+        if (this.multiplayer) {98
+            gameClient.setPhase('GAME_OVER');
+            this.winnerName = winner_name;
+            this.quitButton.visible = false;
+            this.changeReadyButtonVisibility(true);
+            this.readyToPlay();
+        } else {
+            gameClient.setPhase('GAME_OVER');
+        }
+        this.saveScore(this.elapsedTime);
+    }
+
+    updateCompletionPercentage() {
+        if (!this.multiplayer)  return;
+        let matchingTiles = 0;
+        const totalTiles = 9;
+
+        // Iterate through the 3x3 target pattern
         for (let r = 0; r < 3; r++) {
             for (let c = 0; c < 3; c++) {
-                if (this.playerBoard[r + 1][c + 1] !== this.targetPattern[r][c]) {
-                    return false;
+                // The target maps to the inner center of the 5x5 player board (offset by 1)
+                const playerTile = this.playerBoard[r + 1][c + 1];
+                const targetTile = this.targetPattern[r][c];
+
+                if (playerTile === targetTile) {
+                    matchingTiles++;
                 }
             }
         }
-        return true;
-    }
 
-    handleWin() {
-        clearInterval(this.timerInterval);
-        this.gameState = 'GAME_OVER';
-        this.saveScore(this.elapsedTime);
-        this.draw();
+        // Calculate the percentage and round it to the nearest whole number
+        if (gameClient && typeof gameClient.sendProgressUpdate === "function") {
+            gameClient.sendProgressUpdate(Math.round((matchingTiles / totalTiles) * 100));
+            if (matchingTiles >2) {
+                gameClient.playerFinished();
+            }
+        }
     }
 
     loadHighScores() {
         const data = localStorage.getItem('rubrace_highscores');
         this.highScores = data ? JSON.parse(data) : [];
+    }
+
+    quitMultiplayer() {
+        gameClient.setPhase('START_MENU');
     }
 
     saveScore(ms) {
@@ -182,31 +350,74 @@ class RubRace {
 
         this.scale = 1; 
         this.scaleH = 1;
-
-        this.draw();
+        this.drawSquareGameArea();
     }
 
     draw() {
-        // Main Background
-        this.ctx.fillStyle = "#000000FF";
-        this.ctx.fillRect(0, 0, designWidth, designHeight);
+        requestAnimationFrame(() => this.draw());
+        // Background
+        this.ctx.fillStyle = "#0000AAFF";
+        const playersAreaHeight = this.canvas.height / 3 ;
+        const playerAreaY = 0;
+        const w = this.canvas.width;
+        this.ctx.fillRect(0, playerAreaY, w,playersAreaHeight);
 
+        if (gameClient.playerState === 'playing') {
+            this.elapsedTime = Date.now() - this.startTime;
+            const displayTime = this.formatTime(this.elapsedTime);
+            // Draw Timer (mm:ss) centered 
+            // Call the unified drawer
+            this.keyHelper.drawText(this.ctx, displayTime, w / 2, playersAreaHeight + 5, {
+                font: "bold 22px monospace",
+                color: "#FFD500",
+                align: "center",
+                baseline: "top",
+                clearBefore: true, // Erase background behind text
+                padding: 4         // Custom padding size parameter
+            });
+        }
+
+        if (gameClient) {
+            gameClient.draw(this.ctx, 0, playerAreaY, w, playersAreaHeight);
+            if (this.oldphase !== gameClient.phase) {
+                console.log("Game phase changed from " + this.oldphase + " to " + gameClient.phase);
+                this.oldphase = gameClient.phase;
+                if ((gameClient.playerState === "ready" || gameClient.playerState === "waiting")
+                     && gameClient.phase==="PLAYING" ) {
+                    this.startButton.label = 'Join game';
+                    this.startButton.callback= () => {gameClient.joinGame();};
+                    this.startButton.visible = true;
+                }else{
+                    this.startButton.label = 'Start game';
+                    this.startButton.callback= () => {gameClient.startGame();};
+                }
+            }
+            if (this.oldPlayerState !== gameClient.playerState) {
+                console.log("Player state changed from " + this.oldPlayerState + " to " + gameClient.playerState);
+                this.oldPlayerState = gameClient.playerState;
+                if (gameClient.playerState === "lobby") {
+                    this.readyButton.label = UNCHECKED;
+                }else{
+                    this.readyButton.label = CHECKED;
+                }
+            }
+        }
+
+
+        this.keyHelper.draw();
+    }
+
+    drawSquareGameArea() {
         // --- Render Top Game Elements ---
-        const padding = 4;
+        this.padding = 4;
         const borderRadius = 6;
-
-        // Draw Timer (mm:ss) centered at the very top
-        this.ctx.fillStyle = "#FFD500";
-        this.ctx.font = "bold 28px monospace";
-        this.ctx.textAlign = "center";
-        const displayTime = this.formatTime(this.elapsedTime);
-        this.ctx.fillText(displayTime, designWidth / 2, 45);
+        const topAreaHeight = designHeight / 3;
 
         // 3x3 Target Pattern Layout
-        const targetTileSize = 50;
-        const targetGridSize = (targetTileSize * 3) + (padding * 2);
+        const targetTileSize = 40;
+        const targetGridSize = (targetTileSize * 3) + (this.padding * 2);
         const targetStartX = (designWidth - targetGridSize) / 2;
-        const targetStartY = 85;
+        const targetStartY = topAreaHeight + 32;
 
         this.ctx.fillStyle = "#111111";
         this.ctx.fillRect(targetStartX - 8, targetStartY - 8, targetGridSize + 16, targetGridSize + 16);
@@ -214,8 +425,8 @@ class RubRace {
         for (let r = 0; r < 3; r++) {
             for (let c = 0; c < 3; c++) {
                 const colorCode = this.targetPattern[r][c];
-                const x = targetStartX + c * (targetTileSize + padding);
-                const y = targetStartY + r * (targetTileSize + padding);
+                const x = targetStartX + c * (targetTileSize + this.padding);
+                const y = targetStartY + r * (targetTileSize + this.padding);
                 
                 this.ctx.fillStyle = this.colors[colorCode] || "#333333";
                 this.drawRoundedRect(x, y, targetTileSize, targetTileSize, borderRadius);
@@ -223,36 +434,38 @@ class RubRace {
         }
 
         // --- Render Bottom Play Grid ---
-        const playerTileSize = 70;
-        const playerGridSize = (playerTileSize * 5) + (padding * 4);
-        const playerStartX = (designWidth - playerGridSize) / 2;
-        const playerStartY = 400;
+        this.playerTileSize = designWidth/5 - this.padding - 4;
+        this.playerGridSize = (this.playerTileSize * 5) + (this.padding * 4);
+        this.playerStartX = (designWidth - this.playerGridSize) / 2;
+        this.playerStartY = targetStartY + targetGridSize + 22;
 
         this.ctx.fillStyle = "#111111";
-        this.ctx.fillRect(playerStartX - 10, playerStartY - 10, playerGridSize + 20, playerGridSize + 20);
+        this.ctx.fillRect(this.playerStartX - 10, this.playerStartY - 10, this.playerGridSize + 20, this.playerGridSize + 20);
 
         for (let r = 0; r < 5; r++) {
             for (let c = 0; c < 5; c++) {
                 const colorCode = this.playerBoard[r][c];
-                const x = playerStartX + c * (playerTileSize + padding);
-                const y = playerStartY + r * (playerTileSize + padding);
+                const x = this.playerStartX + c * (this.playerTileSize + this.padding);
+                const y = this.playerStartY + r * (this.playerTileSize + this.padding);
 
                 if (colorCode !== null) {
                     this.ctx.fillStyle = this.colors[colorCode];
-                    this.drawRoundedRect(x, y, playerTileSize, playerTileSize, borderRadius);
+                    this.drawRoundedRect(x, y, this.playerTileSize, this.playerTileSize, borderRadius);
                 } else {
                     this.ctx.fillStyle = "#222222";
-                    this.ctx.fillRect(x, y, playerTileSize, playerTileSize);
+                    this.ctx.fillRect(x, y, this.playerTileSize, this.playerTileSize);
                 }
             }
         }
-
-        // --- Render Overlay Screens ---
-        if (this.gameState === 'START_MENU' || this.gameState === 'GAME_OVER') {
-            this.drawOverlay();
-        }
+        if (!this.multiplayer) {
+            // --- Render Overlay Screens ---
+            if (gameClient.phase === 'START_MENU' ||
+                gameClient.phase === 'GAME_OVER'  ) {
+                this.drawOverlay();
+            }
+        }        
     }
-
+        
     drawOverlay() {
         // Semi-transparent overlay block
         this.ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
@@ -261,14 +474,23 @@ class RubRace {
         this.ctx.textAlign = "center";
         
         // Header Text
-        if (this.gameState === 'START_MENU') {
+        if (gameClient.phase === 'START_MENU') {
             this.ctx.fillStyle = "#009B48"; // Retro Green
             this.ctx.font = "bold 32px monospace";
             this.ctx.fillText("RUBIK RACE", designWidth / 2, 130);
+        } else if (gameClient.phase === 'LOBBY') {
+            this.ctx.fillStyle = "#009B48"; // Retro Green
+            this.ctx.font = "bold 32px monospace";
+            this.ctx.fillText("MULTIPLAYER LOBBY", designWidth / 2, 130);
         } else {
             this.ctx.fillStyle = "#B71234"; // Retro Red
             this.ctx.font = "bold 32px monospace";
             this.ctx.fillText("GAME FINISHED!", designWidth / 2, 110);
+            if (this.multiplayer && this.winnerName) {
+                this.ctx.fillStyle = "#FFD500"; // Gold
+                this.ctx.font = "bold 42px monospace";
+                this.ctx.fillText("Winner: "+this.winnerName, designWidth / 2, 150);
+            }
 
             this.ctx.fillStyle = "#FFFFFF";
             this.ctx.font = "20px monospace";
@@ -278,7 +500,7 @@ class RubRace {
         // Leaderboard Title
         this.ctx.fillStyle = "#FF5800"; // Orange
         this.ctx.font = "22px monospace";
-        this.ctx.fillText("TOP 10 LEADERBOARD", designWidth / 2, 220);
+        this.ctx.fillText("YOUR BEST TIMES", designWidth / 2, 220);
 
         // Render Leaderboard Items
         this.ctx.font = "18px monospace";
@@ -309,14 +531,16 @@ class RubRace {
             });
         }
 
-        // Call-to-action Footer
-        this.ctx.textAlign = "center";
-        this.ctx.fillStyle = "#FFFFFF";
-        this.ctx.font = "bold 20px monospace";
+        if (gameClient.phase === 'START_MENU') {
+            // Call-to-action Footer
+            this.ctx.textAlign = "center";
+            this.ctx.fillStyle = "#FFFFFF";
+            this.ctx.font = "bold 20px monospace";
 
-        // Quick blink calculation using timestamps
-        if (Math.floor(Date.now() / 600) % 2 === 0) {
-            this.ctx.fillText("TAP SCREEN TO START", designWidth / 2, 680);
+            // Quick blink calculation using timestamps
+            if (Math.floor(Date.now() / 600) % 2 === 0) {
+                this.ctx.fillText("TAP SCREEN TO START", designWidth / 2, 680);
+            }
         }
     }
 
@@ -342,15 +566,17 @@ class RubRace {
     }
 
     handleTouch(e) {
-        if (e.type === 'touchstart') {
-            e.preventDefault();
-        }
-
         // Handle Tap-To-Start state changes
-        if (this.gameState === 'START_MENU' || this.gameState === 'GAME_OVER') {
-            this.startGame();
+        if (gameClient.phase === 'START_MENU' || gameClient.phase === 'GAME_OVER') {
+            if (this.multiplayer) {
+                this.startLobby();
+            } else {
+                this.startGame();
+            }
             return;
         }
+
+        if (gameClient.playerState !== 'playing') return;
 
         const rect = this.canvas.getBoundingClientRect();
         let clientX, clientY;
@@ -374,22 +600,16 @@ class RubRace {
 
         const finalX = canvasX * (designWidth / rect.width);
         const finalY = canvasY * (designHeight / rect.height);
-
         this.processGridClick(finalX, finalY);
     }
 
     processGridClick(x, y) {
-        const padding = 4;
-        const playerTileSize = 70;
-        const playerGridSize = (playerTileSize * 5) + (padding * 4);
-        const playerStartX = (designWidth - playerGridSize) / 2;
-        const playerStartY = 400;
 
-        if (x >= playerStartX && x < playerStartX + playerGridSize &&
-            y >= playerStartY && y < playerStartY + playerGridSize) {
+        if (x >= this.playerStartX && x < this.playerStartX + this.playerGridSize &&
+            y >= this.playerStartY && y < this.playerStartY + this.playerGridSize) {
             
-            const col = Math.floor((x - playerStartX) / (playerTileSize + padding));
-            const row = Math.floor((y - playerStartY) / (playerTileSize + padding));
+            const col = Math.floor((x - this.playerStartX) / (this.playerTileSize + this.padding));
+            const row = Math.floor((y - this.playerStartY) / (this.playerTileSize + this.padding));
 
             if (row >= 0 && row < 5 && col >= 0 && col < 5) {
                 this.tryMoveTile(row, col);
@@ -420,13 +640,8 @@ class RubRace {
 
             this.playerBoard[clickedRow][clickedCol] = null;
             this.emptyPos = { row: clickedRow, col: clickedCol };
-
-            // Check if this move completes the target pattern match
-            if (this.checkWinCondition()) {
-                this.handleWin();
-            } else {
-                this.draw();
-            }
+            this.updateCompletionPercentage();
+            this.drawSquareGameArea();
         }
     }
 }

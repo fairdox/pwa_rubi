@@ -6,6 +6,7 @@ self.addEventListener("install", event => {
       return cache.addAll([
         "./",
         "./index.html",
+        "./gameClient.js",
         "./rubrace.js",
         './icon-192.png',
         './icon-512.png',

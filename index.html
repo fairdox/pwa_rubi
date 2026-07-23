@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -13,10 +12,9 @@
             overflow: hidden;
             height: 100%;
             width: 100%;
-            background-color: #1a1a1a; /* Dark background for the letterbox effect */
+            background-color: #1a1a1a;
         }
 
-        /* A dedicated overlay that covers the entire game area */
         .overlay {
             position: absolute;
             top: 0;
@@ -24,17 +22,45 @@
             width: 100%;
             height: 100%;
             display: flex;
+            flex-direction: column; /* Stacks name input above the button if visible */
             justify-content: center;
             align-items: center;
-            background-color: rgba(0, 0, 0, 0.7); /* Dims the fretboard until start */
-            z-index: 100; /* Higher than your ui-layer z-index: 50 */
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 100;
             transition: opacity 0.5s ease;
+            gap: 20px;
         }
 
-        #start-button {
-            pointer-events: auto; /* Re-enable clicks for the button itself */
-            padding: 15px 40px;
-            font-size: 24px;
+        /* Style for the name prompt container */
+        .name-prompt-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            background: #2c3e50;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #3498db;
+        }
+
+        .name-prompt-container label {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .name-input {
+            padding: 8px;
+            font-size: 16px;
+            border-radius: 4px;
+            border: none;
+            text-align: center;
+            width: 200px;
+        }
+
+        .start-button {
+            pointer-events: auto;
+            padding: 15px 20px;
+            font-size: 18px;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             font-weight: bold;
             color: #ffffff;
@@ -50,12 +76,12 @@
 
         #rubrace {
             background-color: #000;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5); /* Adds a slight shadow to define the 'screen' */
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
         }        
         canvas {
             display: block;            
         }
-       
+        
         .ui-layer { 
             position: absolute; 
             bottom: 15px; 
@@ -96,7 +122,7 @@
         #sideMenu {
             position: fixed;
             top: 0;
-            left: -280px; /* Hidden off-screen */
+            left: -280px;
             width: 250px;
             height: 100%;
             background: rgba(30, 30, 30, 0.95);
@@ -108,7 +134,7 @@
         }
         
         #sideMenu.active {
-            left: 0; /* Slide in */
+            left: 0;
         }
         
         .menu-items button {
@@ -144,8 +170,9 @@
         }
 
         .option-row { margin: 25px 0; }
-        .option-row label { font-size: 1.2em; cursor: pointer; }
-        .option-row input { transform: scale(1.6); margin-right: 15px; vertical-align: middle; }
+        .option-row label { font-size: 1.2em; cursor: pointer; display: block; margin-bottom: 8px; }
+        .option-row input[type="checkbox"] { transform: scale(1.6); margin-right: 15px; vertical-align: middle; }
+        .option-row input[type="text"] { padding: 8px; font-size: 16px; border-radius: 4px; border: 1px solid #555; background: #222; color: white; text-align: center; }
 
         #app {
             position: fixed;
@@ -157,7 +184,6 @@
             align-items: center;
         }
 
-        /* Helper class to remove the screen */
         .hidden {
             display: none !important;
         }        
@@ -166,11 +192,17 @@
 <body>
 
 <div id="start-screen" class="overlay">
-    <button id="start-button">START</button>
+    <div id="initial-name-box" class="name-prompt-container hidden">
+        <label for="initial-name-input">Enter Player Name:</label>
+        <input type="text" id="initial-name-input" class="name-input" placeholder="Player Name">
+    </div>
+    <button class="start-button" id="startMP-button">Multiplayer</button>
+    <button class="start-button" id="startSP-button">Single Player</button>
+
 </div>
 
 <div id="app">
-    <canvas id="rubrace" ></canvas>
+    <canvas id="rubrace"></canvas>
 </div>
 
 <button id="menuTrigger" onclick="toggleMenu(true)">☰</button>
@@ -186,50 +218,69 @@
 
 <div id="optionsMenuPage">
     <h2>SETTINGS</h2>
+    
     <div class="option-row">
-        <label><input type="checkbox" id="debugToggle" onchange="game.showDebug = this.checked"> Show Debug Stats</label>
-    </div>
-    <div class="option-row">
-        <label><input type="checkbox" id="historyToggle" onchange="game.showHistory = this.checked" checked> Show Fretboard Tap History </label>
+        <label for="settings-name-input">Player Name:</label>
+        <input type="text" id="settings-name-input" placeholder="Player Name">
     </div>
 
+    <div class="option-row">
+        <button onclick="saveSettingsName();toggleMenuPage(false);">Save & Close</button>
+    </div>
 </div>
-<script src="rubrace.js?v=1.002"></script>
 
+<script src="Keyhelper.js?v=1.002"></script>
+<script src="gameClient.js?v=1.002"></script>
+<script src="rubrace.js?v=1.003"></script>
 
 <script>
 let game = null;
 
 async function readyApp() {
     try {
-
         game = new RubRace(document.getElementById('rubrace'));
-
-        game.draw();
-
+        
     } catch (err) {
         console.error("Initialization failed:", err);
     }
 }
 
-
+function checkStoredPlayerName() {
+    const savedName = localStorage.getItem("playerName");
+    const nameBox = document.getElementById("initial-name-box");
+    
+    if (!savedName || savedName.trim() === "") {
+        // Show the input field box on the start screen overlay
+        nameBox.classList.remove("hidden");
+    }
+}
 
 function toggleMenuPage(show) {
     document.getElementById('optionsMenuPage').style.display = show ? 'block' : 'none';
     if (show) {
-        document.getElementById('debugToggle').checked = game.showDebug;
-        document.getElementById('historyToggle').checked = game.showHistory;
-        document.getElementById('permission3D').checked = game.show3D;
+        // Sync setting page fields
+        const savedName = localStorage.getItem("playerName") || "Player";
+        document.getElementById("settings-name-input").value = savedName;
+
+        if (document.getElementById('debugToggle')) document.getElementById('debugToggle').checked = game.showDebug;
+        if (document.getElementById('historyToggle')) document.getElementById('historyToggle').checked = game.showHistory;
+        if (document.getElementById('permission3D')) document.getElementById('permission3D').checked = game.show3D;
     } 
 }
 
-
-function switchGame(type) {
-    //if (type === 'section') 
-    game.calculate() 
-    toggleMenu(false); // Close the drawer after selection
-    game.reset();
-    localStorage.setItem('lastGame', type);
+function saveSettingsName() {
+    const nameInput = document.getElementById("settings-name-input");
+    const newName = nameInput.value.trim();
+    
+    if (newName !== "") {
+        localStorage.setItem("playerName", newName);
+        console.log("Player name updated in settings to: " + newName);
+        
+        // Notify your gameClient instance if it is currently active
+        if (gameClient && typeof gameClient.init === "function") {
+            gameClient.playerName = newName;
+        }
+    }
 }
 
 function toggleMenu(isOpen) {
@@ -241,20 +292,39 @@ function toggleMenu(isOpen) {
     }
 }
 
-
 const startScreen = document.getElementById('start-screen');
-const startButton = document.getElementById('start-button');
-startButton.addEventListener('click', async () => {
+const startMPButton = document.getElementById('startMP-button');
+const startSPButton = document.getElementById('startSP-button');
 
-     // Hide the start screen
+startMPButton.addEventListener('click', async () => {
+    checkStoredPlayerName();
+    let activeName = localStorage.getItem("playerName");
+    const initialInput = document.getElementById("initial-name-input");
+
+    // If name is not stored, validate the input field
+    if (!activeName || activeName.trim() === "") {
+        const structuralName = initialInput.value.trim();
+        if (structuralName === "") {
+            alert("Please enter a valid player name to start.");
+            return;
+        }
+        localStorage.setItem("playerName", structuralName);
+        activeName = structuralName;
+    }
+
+    // Hide the start screen
     startScreen.classList.add('hidden');
-    game.draw();
-
+    game.init(true,"ws://localhost:8765", activeName);
 });
 
-readyApp();
+startSPButton.addEventListener('click', async () => {
+    // For single player, we can just hide the start screen and initialize the game without connecting to a server
+    startScreen.classList.add('hidden');
+    game.init();
+});
 
-// to start a server in command line : python -m http.server 8000
+
+readyApp();
 </script>
 </body>
 </html>
